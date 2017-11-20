@@ -1,0 +1,172 @@
+---
+title: "Practical Machine Learning - Prediction Assignment Writeup"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(RCurl)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(caret)
+library(randomForest)
+library(corrplot)
+
+```
+
+
+# Overview
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+The goal of this writup is to use the data captured by the  accelerometers on the devices worn by the 6 participants. The devices will be worn on the forearm, arm, and dumbell.  The partifipants were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+# Data
+
+Source location for training data:
+
+-   https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+Source location for test data:
+
+-   https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+
+```{r cars}
+
+
+setwd("./")
+
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+if (!file.exists("./data/pml-training.csv")) {
+  url.training <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+  download.file(url.training, destfile = "./data/pml-training.csv")
+}
+
+if (!file.exists("./data/pml-testing.csv")) {
+  url.testing <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+  download.file(url.testing, destfile = "./data/pml-testing.csv")
+}
+```
+
+# Reading data and data processing
+
+
+```{r pressure, echo=FALSE}
+train<- read.csv("./data/pml-training.csv")
+test<- read.csv("./data/pml-testing.csv")
+dim(train)
+
+dim(test)
+```
+
+Breakdown of the collected data:
+  Training data set contains 19622 observations and 160 variables.
+
+  Testing data set contains 20 observations and 160 variables. 
+  
+
+## Clean data to remove variables which are close to zero variance and columns that contain 'N/A' missing values.
+
+Cleaning the data will remove all columns that contains NA and remove features that are not in the testing dataset. Also, since there is no time dependant features, they will also be removed along with features which are not neumeric.
+
+
+```{r}
+train <- train[, colSums(is.na(train)) == 0] 
+test <- test[, colSums(is.na(test)) == 0] 
+classe <- train$classe
+trainR <- grepl("^X|timestamp|window", names(train))
+train <- train[, !trainR]
+trainM <- train[, sapply(train, is.numeric)]
+trainM$classe <- classe
+testR <- grepl("^X|timestamp|window", names(test))
+test<- test[, !testR]
+testM <- test[, sapply(test, is.numeric)]
+
+dim(trainM); dim(testM);
+```
+
+
+# Data Partitioning
+The training data is separated into two data sets into two data sets:   1) 70% for train data
+  2) 30% for test data, to be used for validation purpose
+    
+```{r}
+library(caret)
+set.seed(62374) 
+inTrain <- createDataPartition(trainM$classe, p=0.70, list=F)
+train_data <- trainM[inTrain, ]
+test_data <- trainM[-inTrain, ]
+dim(train_data); dim(test_data); 
+
+```
+    
+
+# Data Prediction and Modelling
+
+##    1.  Decision Tree 
+###   Predicting with the Decision Tree Model
+
+The results of the decision treee testing were not optimal, as expected.
+
+```{r}
+treeModel <- train(classe ~ .,method='rpart',data=train_data)
+fancyRpartPlot(treeModel$finalModel)
+```
+  
+
+```{r}
+set.seed(23142)
+
+prediction <- predict(treeModel$finalModel, test_data, type = "class")
+confusionMatrix(prediction, test_data$class)
+
+```
+
+
+The Accuracy of 0.554, rules out using the Decision tree as basis to provide trustworthy guidance.
+    
+```{r}
+accu=confusionMatrix(prediction,test_data$classe)
+accu$overall[1]
+```
+
+
+##    2. Random Forest
+###   Predicting with the Decision Tree Model
+
+The results of the Random Forest testing delivered < 1% 
+
+
+```{r}
+set.seed(86752)
+rf_fit=randomForest(classe~., data=train_data, method='class')
+rf_pred = predict(rf_fit,test_data,type='class') 
+```
+
+```{r}
+qplot(roll_belt, magnet_dumbbell_y, colour=classe, data=test_data)  
+
+
+
+```
+
+  
+```{r}
+
+accu2=confusionMatrix(rf_pred,test_data$classe)
+accu2$overall[1]
+
+
+```
+
+
+# Conclusion
+
+Algorithm which will be used for predictive model here is the Random Forest.It can be seen from the confusion matrix the Random Forest model is 99% accurate. 
+
